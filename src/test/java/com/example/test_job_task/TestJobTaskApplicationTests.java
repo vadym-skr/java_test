@@ -1,9 +1,12 @@
 package com.example.test_job_task;
 
+import com.example.test_job_task.database.entity.Coupon;
+import com.example.test_job_task.database.entity.Ticket;
 import com.example.test_job_task.database.repository.BaggageRepository;
 import com.example.test_job_task.database.repository.CouponRepository;
 import com.example.test_job_task.database.repository.DestinationRepository;
 import com.example.test_job_task.database.repository.TicketRepository;
+import com.example.test_job_task.dto.request.AddCouponTicketRequest;
 import com.example.test_job_task.dto.request.ReserveTicketRequest;
 import com.example.test_job_task.exception.InternalViolationException;
 import com.example.test_job_task.exception.InternalViolationType;
@@ -16,8 +19,12 @@ import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -181,5 +188,194 @@ class TestJobTaskApplicationTests {
         verify(baggageRepository, times(1)).existsById(ticketId);
         verify(destinationRepository, times(1)).existsById(ticketId);
         verify(ticketRepository, times(1)).isReservedTicket(ticketId);
+    }
+
+    @Test
+    void testReserve_ifAllExistAndTicketNotReservedAndCashNotContain() {
+        Long ticketId = 1L;
+        Long baggageId = 1L;
+        Long destinationId = 1L;
+        ReserveTicketRequest request = new ReserveTicketRequest(ticketId, baggageId, destinationId);
+        String cashKey = "isReserved{id=1}";
+        Ticket ticketFromRep = new Ticket();
+        ticketFromRep.setId(1L);
+        ticketFromRep.setPrice(10.50);
+        ticketFromRep.setReserved(false);
+
+        Mockito.when(ticketRepository.existsById(ticketId))
+            .thenReturn(true);
+        Mockito.when(baggageRepository.existsById(baggageId))
+            .thenReturn(true);
+        Mockito.when(destinationRepository.existsById(destinationId))
+            .thenReturn(true);
+        Mockito.when(ticketRepository.isReservedTicket(ticketId))
+            .thenReturn(false);
+        Mockito.when(ticketRepository.getById(ticketId))
+            .thenReturn(ticketFromRep);
+        Mockito.when(ticketRepository.update(any(Ticket.class)))
+            .thenReturn(true);
+        Mockito.when(cashManager.isInCache(cashKey)).thenReturn(false);
+
+        boolean result = ticketService.reserve(request);
+
+        assertTrue(result);
+
+        verify(ticketRepository, times(1)).existsById(ticketId);
+        verify(baggageRepository, times(1)).existsById(ticketId);
+        verify(destinationRepository, times(1)).existsById(ticketId);
+        verify(ticketRepository, times(1)).isReservedTicket(ticketId);
+        verify(ticketRepository, times(1)).getById(ticketId);
+        verify(ticketRepository, times(1)).update(any(Ticket.class));
+        verify(cashManager, times(1)).isInCache(cashKey);
+    }
+
+    @Test
+    void testReserve_ifAllExistAndTicketNotReservedAndCashContains() {
+        Long ticketId = 1L;
+        Long baggageId = 1L;
+        Long destinationId = 1L;
+        ReserveTicketRequest request = new ReserveTicketRequest(ticketId, baggageId, destinationId);
+        String cashKey = "isReserved{id=1}";
+        Ticket ticketFromRep = new Ticket();
+        ticketFromRep.setId(1L);
+        ticketFromRep.setPrice(10.50);
+        ticketFromRep.setReserved(false);
+
+        Mockito.when(ticketRepository.existsById(ticketId))
+            .thenReturn(true);
+        Mockito.when(baggageRepository.existsById(baggageId))
+            .thenReturn(true);
+        Mockito.when(destinationRepository.existsById(destinationId))
+            .thenReturn(true);
+        Mockito.when(ticketRepository.isReservedTicket(ticketId))
+            .thenReturn(false);
+        Mockito.when(ticketRepository.getById(ticketId))
+            .thenReturn(ticketFromRep);
+        Mockito.when(ticketRepository.update(any(Ticket.class)))
+            .thenReturn(true);
+        Mockito.when(cashManager.isInCache(cashKey)).thenReturn(true);
+
+        boolean result = ticketService.reserve(request);
+
+        assertTrue(result);
+
+        verify(ticketRepository, times(1)).existsById(ticketId);
+        verify(baggageRepository, times(1)).existsById(ticketId);
+        verify(destinationRepository, times(1)).existsById(ticketId);
+        verify(ticketRepository, times(1)).isReservedTicket(ticketId);
+        verify(ticketRepository, times(1)).getById(ticketId);
+        verify(ticketRepository, times(1)).update(any(Ticket.class));
+        verify(cashManager, times(1)).isInCache(cashKey);
+        verify(cashManager, times(1)).addToCache(cashKey, true);
+    }
+
+    @Test
+    void testAddCoupon_ifTicketNotExists() {
+        Long ticketId = 1L;
+        Long couponId = 1L;
+        AddCouponTicketRequest request = new AddCouponTicketRequest(ticketId, couponId);
+
+        Mockito.when(ticketRepository.existsById(ticketId))
+            .thenReturn(false);
+
+        assertThatThrownBy(() -> ticketService.addCoupon(request))
+            .isInstanceOf(InternalViolationException.class)
+            .hasMessage(InternalViolationType.TICKET_WITH_SUCH_ID_NOT_FOUND.getMessage());
+
+        verify(ticketRepository, times(1)).existsById(ticketId);
+    }
+
+    @Test
+    void testAddCoupon_ifTicketExistsButCouponNotExists() {
+        Long ticketId = 1L;
+        Long couponId = 1L;
+        AddCouponTicketRequest request = new AddCouponTicketRequest(ticketId, couponId);
+
+        Mockito.when(ticketRepository.existsById(ticketId))
+            .thenReturn(true);
+        Mockito.when(couponRepository.existsById(ticketId))
+            .thenReturn(false);
+
+        assertThatThrownBy(() -> ticketService.addCoupon(request))
+            .isInstanceOf(InternalViolationException.class)
+            .hasMessage(InternalViolationType.COUPON_WITH_SUCH_ID_NOT_FOUND.getMessage());
+
+        verify(ticketRepository, times(1)).existsById(ticketId);
+        verify(couponRepository, times(1)).existsById(couponId);
+    }
+
+    @Test
+    void testAddCoupon_ifAllExistsButTicketNotReserved() {
+        Long ticketId = 1L;
+        Long couponId = 1L;
+        AddCouponTicketRequest request = new AddCouponTicketRequest(ticketId, couponId);
+        Ticket ticketFromRep = new Ticket();
+        ticketFromRep.setId(1L);
+        ticketFromRep.setPrice(10.50);
+        ticketFromRep.setReserved(false);
+        Coupon couponFromRep = new Coupon();
+        couponFromRep.setId(1L);
+        couponFromRep.setDiscount(10.00F);
+
+        Mockito.when(ticketRepository.existsById(ticketId))
+            .thenReturn(true);
+        Mockito.when(couponRepository.existsById(ticketId))
+            .thenReturn(true);
+        Mockito.when(ticketRepository.getById(ticketId))
+            .thenReturn(ticketFromRep);
+        Mockito.when(couponRepository.getById(ticketId))
+            .thenReturn(couponFromRep);
+
+        assertThatThrownBy(() -> ticketService.addCoupon(request))
+            .isInstanceOf(InternalViolationException.class)
+            .hasMessage(InternalViolationType.TICKET_WITH_SUCH_ID_NOT_RESERVED.getMessage());
+
+        verify(ticketRepository, times(1)).existsById(ticketId);
+        verify(couponRepository, times(1)).existsById(couponId);
+        verify(ticketRepository, times(1)).getById(ticketId);
+        verify(couponRepository, times(1)).getById(couponId);
+    }
+
+    @Test
+    void testAddCoupon_ifEverythingFine() {
+        Long ticketId = 1L;
+        Long couponId = 1L;
+        AddCouponTicketRequest request = new AddCouponTicketRequest(ticketId, couponId);
+        Ticket ticketFromRep = new Ticket();
+        ticketFromRep.setId(1L);
+        ticketFromRep.setPrice(10.00);
+        ticketFromRep.setReserved(true);
+        Coupon couponFromRep = new Coupon();
+        couponFromRep.setId(1L);
+        couponFromRep.setDiscount(10.00F);
+
+        double expectedPrice = 9.0;
+
+        Mockito.when(ticketRepository.existsById(ticketId))
+            .thenReturn(true);
+        Mockito.when(couponRepository.existsById(ticketId))
+            .thenReturn(true);
+        Mockito.when(ticketRepository.getById(ticketId))
+            .thenReturn(ticketFromRep);
+        Mockito.when(couponRepository.getById(ticketId))
+            .thenReturn(couponFromRep);
+        Mockito.when(ticketRepository.update(any(Ticket.class)))
+            .thenReturn(true);
+
+        boolean result = ticketService.addCoupon(request);
+
+        assertTrue(result);
+
+        verify(ticketRepository, times(1)).existsById(ticketId);
+        verify(couponRepository, times(1)).existsById(couponId);
+        verify(ticketRepository, times(1)).getById(ticketId);
+        verify(couponRepository, times(1)).getById(couponId);
+        verify(ticketRepository, times(1)).update(any(Ticket.class));
+        verify(ticketRepository).update(argThat(
+            ticket ->
+                ticket.getPrice().equals(10.00)
+                && ticket.getFinalPrice().equals(expectedPrice)
+                && ticket.getCouponId().equals(couponId)
+        ));
     }
 }

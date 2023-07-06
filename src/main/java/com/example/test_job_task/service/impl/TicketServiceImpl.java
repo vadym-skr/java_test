@@ -15,6 +15,9 @@ import com.example.test_job_task.util.CashManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 @Service
 public class TicketServiceImpl implements TicketService {
 
@@ -79,8 +82,8 @@ public class TicketServiceImpl implements TicketService {
 
     @Override
     public boolean addCoupon(AddCouponTicketRequest request) {
-        if (ticketRepository.isReservedTicket(request.getTicketId())) {
-            throw new InternalViolationException(InternalViolationType.TICKET_WITH_SUCH_ID_RESERVED);
+        if (!ticketRepository.existsById(request.getTicketId())) {
+            throw new InternalViolationException(InternalViolationType.TICKET_WITH_SUCH_ID_NOT_FOUND);
         }
         if (!couponRepository.existsById(request.getCouponId())) {
             throw new InternalViolationException(InternalViolationType.COUPON_WITH_SUCH_ID_NOT_FOUND);
@@ -94,6 +97,11 @@ public class TicketServiceImpl implements TicketService {
         }
 
         double finalPrice = ticket.getPrice() - ((coupon.getDiscount() / 100) * ticket.getPrice());
+        // I use it because there are some problem with double
+        // It is better use BigDecimal not double to store price but i don't have time to change it ):
+        finalPrice = BigDecimal.valueOf(finalPrice)
+            .setScale(3, RoundingMode.HALF_UP)
+            .doubleValue();
 
         ticket.setCouponId(request.getCouponId());
         ticket.setFinalPrice(finalPrice);

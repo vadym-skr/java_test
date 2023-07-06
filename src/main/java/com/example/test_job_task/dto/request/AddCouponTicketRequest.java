@@ -6,6 +6,13 @@ public class AddCouponTicketRequest {
 
     private Long couponId;
 
+    public AddCouponTicketRequest() {
+    }
+
+    public AddCouponTicketRequest(Long ticketId, Long couponId) {
+        this.ticketId = ticketId;
+        this.couponId = couponId;
+    }
 
     public Long getTicketId() {
         return ticketId;
