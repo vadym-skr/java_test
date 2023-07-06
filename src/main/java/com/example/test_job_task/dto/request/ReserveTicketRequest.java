@@ -8,6 +8,15 @@ public class ReserveTicketRequest {
 
     private Long destinationId;
 
+    public ReserveTicketRequest() {
+    }
+
+    public ReserveTicketRequest(Long ticketId, Long baggageId, Long destinationId) {
+        this.ticketId = ticketId;
+        this.baggageId = baggageId;
+        this.destinationId = destinationId;
+    }
+
     public Long getTicketId() {
         return ticketId;
     }

@@ -10,12 +10,13 @@ import com.example.test_job_task.dto.request.AddCouponTicketRequest;
 import com.example.test_job_task.dto.request.ReserveTicketRequest;
 import com.example.test_job_task.exception.InternalViolationException;
 import com.example.test_job_task.exception.InternalViolationType;
+import com.example.test_job_task.service.TicketService;
 import com.example.test_job_task.util.CashManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
-public class TicketServiceImpl {
+public class TicketServiceImpl implements TicketService {
 
     private final CashManager cashManager;
 
@@ -33,6 +34,7 @@ public class TicketServiceImpl {
         this.destinationRepository = destinationRepository;
     }
 
+    @Override
     public boolean isReserved(Long id) {
         String cashName = "isReserved{id=" + id + "}";
         Boolean cashResult = (Boolean) cashManager.getFromCache(cashName);
@@ -44,15 +46,19 @@ public class TicketServiceImpl {
         return result;
     }
 
+    @Override
     public boolean reserve(ReserveTicketRequest request) {
-        if (ticketRepository.isReservedTicket(request.getTicketId())) {
-            throw new InternalViolationException(InternalViolationType.TICKET_WITH_SUCH_ID_RESERVED);
+        if (!ticketRepository.existsById(request.getTicketId())) {
+            throw new InternalViolationException(InternalViolationType.TICKET_WITH_SUCH_ID_NOT_FOUND);
         }
         if (!baggageRepository.existsById(request.getBaggageId())) {
             throw new InternalViolationException(InternalViolationType.BAGGAGE_WITH_SUCH_ID_NOT_FOUND);
         }
         if (!destinationRepository.existsById(request.getDestinationId())) {
             throw new InternalViolationException(InternalViolationType.DESTINATION_WITH_SUCH_ID_NOT_FOUND);
+        }
+        if (ticketRepository.isReservedTicket(request.getTicketId())) {
+            throw new InternalViolationException(InternalViolationType.TICKET_WITH_SUCH_ID_RESERVED);
         }
 
         Ticket ticket = ticketRepository.getById(request.getTicketId());
@@ -71,6 +77,7 @@ public class TicketServiceImpl {
         return ticketRepository.update(ticket);
     }
 
+    @Override
     public boolean addCoupon(AddCouponTicketRequest request) {
         if (ticketRepository.isReservedTicket(request.getTicketId())) {
             throw new InternalViolationException(InternalViolationType.TICKET_WITH_SUCH_ID_RESERVED);
